@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+artifacts/
+cache/
+typechain-types/
+contracts/deployments/
+*.log
+.env
+.env.local
+postgres-data/
+backend/backendarch.zip

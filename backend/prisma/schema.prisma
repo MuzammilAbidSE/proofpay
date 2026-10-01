@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MilestoneStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  RELEASED
+  DISPUTED
+  REFUNDED
+}
+
+enum TransactionType {
+  CREATE_ESCROW
+  DEPOSIT
+  ADD_MILESTONE
+  SUBMIT_MILESTONE
+  APPROVE_MILESTONE
+  RELEASE_PAYMENT
+  OPEN_DISPUTE
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum DisputeResolution {
+  RELEASED_TO_FREELANCER
+  REFUNDED_TO_CLIENT
+}
+
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique
+  nonce         String   @default(uuid())
+  createdAt     DateTime @default(now())
+
+  escrowsAsClient     Escrow[] @relation("ClientEscrows")
+  escrowsAsFreelancer Escrow[] @relation("FreelancerEscrows")
+
+  @@map("users")
+}
+
+model Escrow {
+  id              String   @id @default(uuid())
+  onChainId       Int      @unique
+  contractAddress String
+  clientId        String
+  freelancerId    String
+  arbitratorAddr  String
+  createdAt       DateTime @default(now())
+
+  client     User        @relation("ClientEscrows", fields: [clientId], references: [id])
+  freelancer User        @relation("FreelancerEscrows", fields: [freelancerId], references: [id])
+  milestones Milestone[]
+  disputes   Dispute[]
+
+  @@map("escrows")
+}
+
+model Milestone {
+  id          String          @id @default(uuid())
+  escrowId    String
+  onChainId   Int
+  amountWei   String
+  status      MilestoneStatus @default(PENDING)
+  proofHash   String?
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  releasedAt  DateTime?
+  createdAt   DateTime        @default(now())
+
+  escrow   Escrow    @relation(fields: [escrowId], references: [id])
+  disputes Dispute[]
+
+  @@unique([escrowId, onChainId])
+  @@map("milestones")
+}
+
+model BlockchainTransaction {
+  id          String            @id @default(uuid())
+  txHash      String            @unique
+  blockNumber Int?
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  fromAddress String
+  escrowId    String?
+  milestoneId String?
+  createdAt   DateTime          @default(now())
+
+  @@map("blockchain_transactions")
+}
+
+model BlockchainEvent {
+  id              String   @id @default(uuid())
+  contractAddress String
+  eventName       String
+  blockNumber     Int
+  txHash          String
+  logIndex        Int
+  args            Json
+  processedAt     DateTime @default(now())
+
+  @@unique([txHash, logIndex])
+  @@map("blockchain_events")
+}
+
+model Dispute {
+  id           String             @id @default(uuid())
+  escrowId     String
+  milestoneId  String
+  openedByAddr String
+  resolution   DisputeResolution?
+  resolvedAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  escrow    Escrow            @relation(fields: [escrowId], references: [id])
+  milestone Milestone         @relation(fields: [milestoneId], references: [id])
+  evidence  DisputeEvidence[]
+
+  @@unique([escrowId, milestoneId])
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id             String   @id @default(uuid())
+  disputeId      String
+  submittedByAddr String
+  note           String?
+  fileHash       String?
+  createdAt      DateTime @default(now())
+
+  dispute Dispute @relation(fields: [disputeId], references: [id])
+
+  @@map("dispute_evidence")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorAddr  String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
